@@ -1,0 +1,326 @@
+/*
+ * Copyright (C) 2010 The Android Open Source Project
+ * Copyright (C) 2011 Adam NybŠck
+ * Copyright (C) 2011 Some Japanese person/company?
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package se.anyro.nfc_reader;
+
+import java.lang.reflect.Field;
+import java.nio.charset.Charset;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
+
+import se.anyro.nfc_reader.record.ParsedNdefRecord;
+import android.app.Activity;
+import android.app.PendingIntent;
+import android.content.Intent;
+import android.nfc.NdefMessage;
+import android.nfc.NdefRecord;
+import android.nfc.NfcAdapter;
+import android.nfc.Tag;
+import android.nfc.tech.MifareClassic;
+import android.nfc.tech.MifareUltralight;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Parcelable;
+import android.view.LayoutInflater;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+
+/**
+ * An {@link Activity} which handles a broadcast of a new tag that the device just discovered.
+ */
+public class TagViewer extends Activity {
+
+    private SimpleDateFormat timeFormat = new SimpleDateFormat();
+    private LinearLayout mTagContent;
+
+    private NfcAdapter mAdapter;
+    private PendingIntent mPendingIntent;
+    private NdefMessage mNdefPushMessage;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.tag_viewer);
+        mTagContent = (LinearLayout) findViewById(R.id.list);
+        resolveIntent(getIntent());
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.GINGERBREAD_MR1) {
+            mAdapter = NfcAdapter.getDefaultAdapter(this);
+            mPendingIntent = PendingIntent.getActivity(this, 0, new Intent(this, getClass())
+                    .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), 0);
+            mNdefPushMessage = new NdefMessage(new NdefRecord[] { newTextRecord("Message from NFC Reader :-)",
+                    Locale.ENGLISH, true) });
+        }
+    }
+
+    private NdefRecord newTextRecord(String text, Locale locale, boolean encodeInUtf8) {
+        byte[] langBytes = locale.getLanguage().getBytes(Charset.forName("US-ASCII"));
+
+        Charset utfEncoding = encodeInUtf8 ? Charset.forName("UTF-8") : Charset.forName("UTF-16");
+        byte[] textBytes = text.getBytes(utfEncoding);
+
+        int utfBit = encodeInUtf8 ? 0 : (1 << 7);
+        char status = (char) (utfBit + langBytes.length);
+
+        byte[] data = new byte[1 + langBytes.length + textBytes.length];
+        data[0] = (byte) status;
+        System.arraycopy(langBytes, 0, data, 1, langBytes.length);
+        System.arraycopy(textBytes, 0, data, 1 + langBytes.length, textBytes.length);
+
+        return new NdefRecord(NdefRecord.TNF_WELL_KNOWN, NdefRecord.RTD_TEXT, new byte[0], data);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (mAdapter != null) {
+            mAdapter.enableForegroundDispatch(this, mPendingIntent, null, null);
+            mAdapter.enableForegroundNdefPush(this, mNdefPushMessage);
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (mAdapter != null) {
+            mAdapter.disableForegroundDispatch(this);
+            mAdapter.disableForegroundNdefPush(this);
+        }
+    }
+
+    private void resolveIntent(Intent intent) {
+        // Parse the intent
+        String action = intent.getAction();
+        if (NfcAdapter.ACTION_TAG_DISCOVERED.equals(action)) {
+            // When a tag is discovered we send it to the service to be save. We
+            // include a PendingIntent for the service to call back onto. This
+            // will cause this activity to be restarted with onNewIntent(). At
+            // that time we read it from the database and view it.
+            Parcelable[] rawMsgs = intent.getParcelableArrayExtra(NfcAdapter.EXTRA_NDEF_MESSAGES);
+            NdefMessage[] msgs;
+            if (rawMsgs != null) {
+                msgs = new NdefMessage[rawMsgs.length];
+                for (int i = 0; i < rawMsgs.length; i++) {
+                    msgs[i] = (NdefMessage) rawMsgs[i];
+                }
+            } else {
+                // Unknown tag type
+                byte[] empty = new byte[0];
+                byte[] id = intent.getByteArrayExtra(NfcAdapter.EXTRA_ID);
+                Parcelable tag = intent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
+                byte[] payload = null;
+                try {
+                    payload = dumpTagData(tag).getBytes();
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+                NdefRecord record = new NdefRecord(NdefRecord.TNF_UNKNOWN, empty, id, payload);
+                NdefMessage msg = new NdefMessage(new NdefRecord[] { record });
+                msgs = new NdefMessage[] { msg };
+            }
+            // Setup the views
+            buildTagViews(msgs);
+        }
+    }
+
+    /**
+     * The reflection stuff in this method is copied from some Japanies site for backwards compatibility with Android
+     * 2.3-2.3.2.
+     */
+    private String dumpTagData(Parcelable p) throws SecurityException, IllegalArgumentException, IllegalAccessException {
+        StringBuilder sb = new StringBuilder();
+        Field f = null;
+        Class<?> tagClass = p.getClass();
+
+        try {
+            f = tagClass.getDeclaredField("mId");
+            f.setAccessible(true);
+            byte[] mId = (byte[]) f.get(p);
+            sb.append("Tag ID (hex): ").append(getHex(mId)).append("\n");
+            sb.append("Tag ID (dec): ").append(getDec(mId)).append("\n");
+        } catch (NoSuchFieldException e) {
+            e.printStackTrace();
+        }
+
+        try {
+            f = tagClass.getDeclaredField("mRawTargets");
+            f.setAccessible(true);
+            String[] mRawTargets = (String[]) f.get(p);
+            sb.append("Targets: ");
+            if (mRawTargets.length == 1)
+                sb.append(translateTarget(mRawTargets[0]));
+            else {
+                for (String s : mRawTargets) {
+                    sb.append(translateTarget(s)).append(", ");
+                }
+            }
+            sb.append("\n");
+        } catch (NoSuchFieldException e) {
+            String prefix = "android.nfc.tech.";
+            Tag tag = (Tag) p;
+            sb.append("Technologies: ");
+            for (String tech : tag.getTechList()) {
+                sb.append(tech.substring(prefix.length()));
+                sb.append(", ");
+            }
+            sb.delete(sb.length() - 2, sb.length());
+            sb.append('\n');
+            for (String tech : tag.getTechList()) {
+                if (tech.equals(MifareClassic.class.getName())) {
+                    MifareClassic mifareTag = MifareClassic.get(tag);
+                    String type = "Unknown";
+                    switch (mifareTag.getType()) {
+                    case MifareClassic.TYPE_CLASSIC:
+                        type = "Classic";
+                        break;
+                    case MifareClassic.TYPE_PLUS:
+                        type = "Plus";
+                        break;
+                    case MifareClassic.TYPE_PRO:
+                        type = "Pro";
+                        break;
+                    }
+                    sb.append("Mifare Classic type: ");
+                    sb.append(type);
+                    sb.append('\n');
+
+                    sb.append("Mifare size: ");
+                    sb.append(mifareTag.getSize() + " bytes");
+                    sb.append('\n');
+
+                    sb.append("Mifare sectors: ");
+                    sb.append(mifareTag.getSectorCount());
+                    sb.append('\n');
+
+                    sb.append("Mifare blocks: ");
+                    sb.append(mifareTag.getBlockCount());
+                    sb.append('\n');
+                }
+
+                if (tech.equals(MifareUltralight.class.getName())) {
+                    MifareUltralight mifareUlTag = MifareUltralight.get(tag);
+                    String type = "Unknown";
+                    switch (mifareUlTag.getType()) {
+                    case MifareUltralight.TYPE_ULTRALIGHT:
+                        type = "Ultralight";
+                        break;
+                    case MifareUltralight.TYPE_ULTRALIGHT_C:
+                        type = "Ultralight C";
+                        break;
+                    }
+                    sb.append("Mifare Ultralight type: ");
+                    sb.append(type);
+                    sb.append('\n');
+                }
+            }
+        }
+
+        try {
+            f = tagClass.getDeclaredField("mPollBytes");
+            f.setAccessible(true);
+            byte[] mPollBytes = (byte[]) f.get(p);
+            if (mPollBytes != null && mPollBytes.length > 0)
+                sb.append("Poll (hex): ").append(getHex(mPollBytes)).append("\n");
+        } catch (NoSuchFieldException e) {
+            e.printStackTrace();
+        }
+
+        try {
+            f = tagClass.getDeclaredField("mActivationBytes");
+            f.setAccessible(true);
+            byte[] mActivationBytes = (byte[]) f.get(p);
+            if (mActivationBytes != null && mActivationBytes.length > 0)
+                sb.append("Activation (hex): ").append(getHex(mActivationBytes));
+        } catch (NoSuchFieldException e) {
+            e.printStackTrace();
+        }
+
+        return sb.toString();
+    }
+
+    private Object translateTarget(String target) {
+        if ("iso14443_3a".equals(target))
+            return "ISO 14443-3A";
+        else if ("iso14443_3b".equals(target))
+            return "ISO 14443-3B";
+        else if ("iso14443_4".equals(target))
+            return "ISO 14443-4";
+        else if ("iso15693".equals(target))
+            return "ISO 15693 (RFID)";
+        else if ("jis_x_6319_4".equals(target))
+            return "JIS X-6319-4 (FeliCa)";
+        else if ("other".equals(target))
+            return "Unknown";
+
+        return target;
+    }
+
+    private String getHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < bytes.length; i++) {
+            int b = bytes[i] & 0xff;
+            if (b < 0x10)
+                sb.append('0');
+            sb.append(Integer.toHexString(b));
+            if (i != bytes.length - 1) {
+                sb.append(" ");
+            }
+        }
+        return sb.toString();
+    }
+
+    private long getDec(byte[] bytes) {
+        long result = 0;
+        long factor = 1;
+        for (int i = 0; i < bytes.length; ++i) {
+            long value = bytes[i] & 0xffl;
+            result += value * factor;
+            factor *= 256l;
+        }
+        return result;
+    }
+
+    void buildTagViews(NdefMessage[] msgs) {
+        if (msgs == null || msgs.length == 0) {
+            return;
+        }
+        LayoutInflater inflater = LayoutInflater.from(this);
+        LinearLayout content = mTagContent;
+
+        // Parse the first message in the list
+        // Build views for all of the sub records
+        Date now = new Date();
+        List<ParsedNdefRecord> records = NdefMessageParser.parse(msgs[0]);
+        final int size = records.size();
+        for (int i = 0; i < size; i++) {
+            TextView timeView = new TextView(this);
+            timeView.setText(timeFormat.format(now));
+            content.addView(timeView, 0);
+            ParsedNdefRecord record = records.get(i);
+            content.addView(record.getView(this, inflater, content, i), 1 + i);
+            content.addView(inflater.inflate(R.layout.tag_divider, content, false), 2 + i);
+        }
+    }
+
+    @Override
+    public void onNewIntent(Intent intent) {
+        setIntent(intent);
+        resolveIntent(intent);
+    }
+}
