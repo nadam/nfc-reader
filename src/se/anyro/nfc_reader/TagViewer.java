@@ -1,7 +1,6 @@
 /*
  * Copyright (C) 2010 The Android Open Source Project
  * Copyright (C) 2011 Adam NybŠck
- * Copyright (C) 2011 Some Japanese person/company?
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +17,7 @@
 package se.anyro.nfc_reader;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.nio.charset.Charset;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -26,15 +26,16 @@ import java.util.Locale;
 
 import se.anyro.nfc_reader.record.ParsedNdefRecord;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.PendingIntent;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.nfc.NdefMessage;
 import android.nfc.NdefRecord;
 import android.nfc.NfcAdapter;
 import android.nfc.Tag;
 import android.nfc.tech.MifareClassic;
 import android.nfc.tech.MifareUltralight;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Parcelable;
 import android.view.LayoutInflater;
@@ -46,12 +47,34 @@ import android.widget.TextView;
  */
 public class TagViewer extends Activity {
 
-    private SimpleDateFormat timeFormat = new SimpleDateFormat();
+    private static final SimpleDateFormat TIME_FORMAT = new SimpleDateFormat();
     private LinearLayout mTagContent;
 
     private NfcAdapter mAdapter;
     private PendingIntent mPendingIntent;
     private NdefMessage mNdefPushMessage;
+
+    private AlertDialog mDialog;
+
+    // New methods in Android 2.3.3
+    private static Method sAdapter_enableForegroundDispatch;
+    private static Method sAdapter_enableForegroundNdefPush;
+    private static Method sAdapter_disableForegroundDispatch;
+    private static Method sAdapter_disableForegroundNdefPush;
+    static {
+        try {
+            sAdapter_enableForegroundDispatch = NfcAdapter.class.getMethod("enableForegroundDispatch", new Class[] {
+                    Activity.class, PendingIntent.class, IntentFilter[].class, String[][].class });
+            sAdapter_enableForegroundNdefPush = NfcAdapter.class.getMethod("enableForegroundNdefPush", new Class[] {
+                    Activity.class, NdefMessage.class });
+            sAdapter_disableForegroundDispatch = NfcAdapter.class.getMethod("disableForegroundDispatch",
+                    new Class[] { Activity.class });
+            sAdapter_disableForegroundNdefPush = NfcAdapter.class.getMethod("disableForegroundNdefPush",
+                    new Class[] { Activity.class });
+        } catch (NoSuchMethodException e) {
+            // failure, i.e Android 2.3-2.3.2
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,13 +83,23 @@ public class TagViewer extends Activity {
         mTagContent = (LinearLayout) findViewById(R.id.list);
         resolveIntent(getIntent());
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.GINGERBREAD_MR1) {
-            mAdapter = NfcAdapter.getDefaultAdapter(this);
-            mPendingIntent = PendingIntent.getActivity(this, 0, new Intent(this, getClass())
-                    .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), 0);
-            mNdefPushMessage = new NdefMessage(new NdefRecord[] { newTextRecord("Message from NFC Reader :-)",
-                    Locale.ENGLISH, true) });
+        mDialog = new AlertDialog.Builder(this).setNeutralButton("Ok", null).create();
+
+        mAdapter = NfcAdapter.getDefaultAdapter(this);
+        if (mAdapter == null) {
+            showMessage(R.string.error, R.string.no_nfc);
         }
+
+        mPendingIntent = PendingIntent.getActivity(this, 0,
+                new Intent(this, getClass()).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), 0);
+        mNdefPushMessage = new NdefMessage(new NdefRecord[] { newTextRecord("Message from NFC Reader :-)",
+                Locale.ENGLISH, true) });
+    }
+
+    private void showMessage(int title, int message) {
+        mDialog.setTitle(title);
+        mDialog.setMessage(getText(message));
+        mDialog.show();
     }
 
     private NdefRecord newTextRecord(String text, Locale locale, boolean encodeInUtf8) {
@@ -90,8 +123,15 @@ public class TagViewer extends Activity {
     protected void onResume() {
         super.onResume();
         if (mAdapter != null) {
-            mAdapter.enableForegroundDispatch(this, mPendingIntent, null, null);
-            mAdapter.enableForegroundNdefPush(this, mNdefPushMessage);
+            if (!mAdapter.isEnabled()) {
+                showMessage(R.string.error, R.string.nfc_disabled);
+            }
+            try {
+                sAdapter_enableForegroundDispatch.invoke(mAdapter, this, mPendingIntent, null, null);
+                sAdapter_enableForegroundNdefPush.invoke(mAdapter, this, mNdefPushMessage);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
     }
 
@@ -99,19 +139,18 @@ public class TagViewer extends Activity {
     protected void onPause() {
         super.onPause();
         if (mAdapter != null) {
-            mAdapter.disableForegroundDispatch(this);
-            mAdapter.disableForegroundNdefPush(this);
+            try {
+                sAdapter_disableForegroundDispatch.invoke(mAdapter, this);
+                sAdapter_disableForegroundNdefPush.invoke(mAdapter, this);
+            } catch (Exception e) {
+                // ignore
+            }
         }
     }
 
     private void resolveIntent(Intent intent) {
-        // Parse the intent
         String action = intent.getAction();
-        if (NfcAdapter.ACTION_TAG_DISCOVERED.equals(action)) {
-            // When a tag is discovered we send it to the service to be save. We
-            // include a PendingIntent for the service to call back onto. This
-            // will cause this activity to be restarted with onNewIntent(). At
-            // that time we read it from the database and view it.
+        if (NfcAdapter.ACTION_TAG_DISCOVERED.equals(action) || NfcAdapter.ACTION_NDEF_DISCOVERED.equals(action)) {
             Parcelable[] rawMsgs = intent.getParcelableArrayExtra(NfcAdapter.EXTRA_NDEF_MESSAGES);
             NdefMessage[] msgs;
             if (rawMsgs != null) {
@@ -310,7 +349,7 @@ public class TagViewer extends Activity {
         final int size = records.size();
         for (int i = 0; i < size; i++) {
             TextView timeView = new TextView(this);
-            timeView.setText(timeFormat.format(now));
+            timeView.setText(TIME_FORMAT.format(now));
             content.addView(timeView, 0);
             ParsedNdefRecord record = records.get(i);
             content.addView(record.getView(this, inflater, content, i), 1 + i);

@@ -17,4 +17,7 @@
 <resources>
     <string name="app_name">NFC Reader</string>
     <string name="intro_message">This is just a test app to read and display various tags (NDEF, RFID, FeliCa, ISO 14443, etc).\n\nPlease let me know if you want me to change how the data is displayed. Also send me an e-mail (adam@anyro.se) if you have problem with this app and I\'ll let you know when I\'ve fixed it. Thanks!</string>
+    <string name="error">Error</string>
+    <string name="no_nfc">No NFC found on this device</string>
+    <string name="nfc_disabled">NFC is not enabled. Please go to the wireless settings to enable it.</string>
 </resources>
