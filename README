@@ -2,3 +2,5 @@ Simple NFC reader for Android based on the sample code from the Android SDK.
 
 The app is available on Android Market.
 https://market.android.com/details?id=se.anyro.nfc_reader
+
+If you have problem compiling the app make sure you have the /android-sdk/tools/lib/guavalib.jar included in the build path.
