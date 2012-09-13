@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2010 The Android Open Source Project
- * Copyright (C) 2011 Adam NybŠck
+ * Copyright (C) 2011 Adam Nybï¿½ck
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,6 @@
  */
 package se.anyro.nfc_reader;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.nio.charset.Charset;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -29,7 +27,6 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.PendingIntent;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.nfc.NdefMessage;
 import android.nfc.NdefRecord;
 import android.nfc.NfcAdapter;
@@ -56,26 +53,6 @@ public class TagViewer extends Activity {
 
     private AlertDialog mDialog;
 
-    // New methods in Android 2.3.3
-    private static Method sAdapter_enableForegroundDispatch;
-    private static Method sAdapter_enableForegroundNdefPush;
-    private static Method sAdapter_disableForegroundDispatch;
-    private static Method sAdapter_disableForegroundNdefPush;
-    static {
-        try {
-            sAdapter_enableForegroundDispatch = NfcAdapter.class.getMethod("enableForegroundDispatch", new Class[] {
-                    Activity.class, PendingIntent.class, IntentFilter[].class, String[][].class });
-            sAdapter_enableForegroundNdefPush = NfcAdapter.class.getMethod("enableForegroundNdefPush", new Class[] {
-                    Activity.class, NdefMessage.class });
-            sAdapter_disableForegroundDispatch = NfcAdapter.class.getMethod("disableForegroundDispatch",
-                    new Class[] { Activity.class });
-            sAdapter_disableForegroundNdefPush = NfcAdapter.class.getMethod("disableForegroundNdefPush",
-                    new Class[] { Activity.class });
-        } catch (NoSuchMethodException e) {
-            // failure, i.e Android 2.3-2.3.2
-        }
-    }
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -92,8 +69,8 @@ public class TagViewer extends Activity {
 
         mPendingIntent = PendingIntent.getActivity(this, 0,
                 new Intent(this, getClass()).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), 0);
-        mNdefPushMessage = new NdefMessage(new NdefRecord[] { newTextRecord("Message from NFC Reader :-)",
-                Locale.ENGLISH, true) });
+        mNdefPushMessage = new NdefMessage(new NdefRecord[] { newTextRecord(
+                "Message from NFC Reader :-)", Locale.ENGLISH, true) });
     }
 
     private void showMessage(int title, int message) {
@@ -126,12 +103,8 @@ public class TagViewer extends Activity {
             if (!mAdapter.isEnabled()) {
                 showMessage(R.string.error, R.string.nfc_disabled);
             }
-            try {
-                sAdapter_enableForegroundDispatch.invoke(mAdapter, this, mPendingIntent, null, null);
-                sAdapter_enableForegroundNdefPush.invoke(mAdapter, this, mNdefPushMessage);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            mAdapter.enableForegroundDispatch(this, mPendingIntent, null, null);
+            mAdapter.enableForegroundNdefPush(this, mNdefPushMessage);
         }
     }
 
@@ -139,18 +112,15 @@ public class TagViewer extends Activity {
     protected void onPause() {
         super.onPause();
         if (mAdapter != null) {
-            try {
-                sAdapter_disableForegroundDispatch.invoke(mAdapter, this);
-                sAdapter_disableForegroundNdefPush.invoke(mAdapter, this);
-            } catch (Exception e) {
-                // ignore
-            }
+            mAdapter.disableForegroundDispatch(this);
+            mAdapter.disableForegroundNdefPush(this);
         }
     }
 
     private void resolveIntent(Intent intent) {
         String action = intent.getAction();
-        if (NfcAdapter.ACTION_TAG_DISCOVERED.equals(action) || NfcAdapter.ACTION_NDEF_DISCOVERED.equals(action)) {
+        if (NfcAdapter.ACTION_TAG_DISCOVERED.equals(action)
+                || NfcAdapter.ACTION_NDEF_DISCOVERED.equals(action)) {
             Parcelable[] rawMsgs = intent.getParcelableArrayExtra(NfcAdapter.EXTRA_NDEF_MESSAGES);
             NdefMessage[] msgs;
             if (rawMsgs != null) {
@@ -182,132 +152,72 @@ public class TagViewer extends Activity {
      * The reflection stuff in this method is copied from some Japanies site for backwards compatibility with Android
      * 2.3-2.3.2.
      */
-    private String dumpTagData(Parcelable p) throws SecurityException, IllegalArgumentException, IllegalAccessException {
+    private String dumpTagData(Parcelable p) throws SecurityException, IllegalArgumentException,
+            IllegalAccessException {
         StringBuilder sb = new StringBuilder();
-        Field f = null;
-        Class<?> tagClass = p.getClass();
+        Tag tag = (Tag) p;
+        byte[] id = tag.getId();
+        sb.append("Tag ID (hex): ").append(getHex(id)).append("\n");
+        sb.append("Tag ID (dec): ").append(getDec(id)).append("\n");
 
-        try {
-            f = tagClass.getDeclaredField("mId");
-            f.setAccessible(true);
-            byte[] mId = (byte[]) f.get(p);
-            sb.append("Tag ID (hex): ").append(getHex(mId)).append("\n");
-            sb.append("Tag ID (dec): ").append(getDec(mId)).append("\n");
-        } catch (NoSuchFieldException e) {
-            e.printStackTrace();
+        String prefix = "android.nfc.tech.";
+        sb.append("Technologies: ");
+        for (String tech : tag.getTechList()) {
+            sb.append(tech.substring(prefix.length()));
+            sb.append(", ");
         }
-
-        try {
-            f = tagClass.getDeclaredField("mRawTargets");
-            f.setAccessible(true);
-            String[] mRawTargets = (String[]) f.get(p);
-            sb.append("Targets: ");
-            if (mRawTargets.length == 1)
-                sb.append(translateTarget(mRawTargets[0]));
-            else {
-                for (String s : mRawTargets) {
-                    sb.append(translateTarget(s)).append(", ");
+        sb.delete(sb.length() - 2, sb.length());
+        sb.append('\n');
+        for (String tech : tag.getTechList()) {
+            if (tech.equals(MifareClassic.class.getName())) {
+                MifareClassic mifareTag = MifareClassic.get(tag);
+                String type = "Unknown";
+                switch (mifareTag.getType()) {
+                case MifareClassic.TYPE_CLASSIC:
+                    type = "Classic";
+                    break;
+                case MifareClassic.TYPE_PLUS:
+                    type = "Plus";
+                    break;
+                case MifareClassic.TYPE_PRO:
+                    type = "Pro";
+                    break;
                 }
+                sb.append("Mifare Classic type: ");
+                sb.append(type);
+                sb.append('\n');
+
+                sb.append("Mifare size: ");
+                sb.append(mifareTag.getSize() + " bytes");
+                sb.append('\n');
+
+                sb.append("Mifare sectors: ");
+                sb.append(mifareTag.getSectorCount());
+                sb.append('\n');
+
+                sb.append("Mifare blocks: ");
+                sb.append(mifareTag.getBlockCount());
+                sb.append('\n');
             }
-            sb.append("\n");
-        } catch (NoSuchFieldException e) {
-            String prefix = "android.nfc.tech.";
-            Tag tag = (Tag) p;
-            sb.append("Technologies: ");
-            for (String tech : tag.getTechList()) {
-                sb.append(tech.substring(prefix.length()));
-                sb.append(", ");
-            }
-            sb.delete(sb.length() - 2, sb.length());
-            sb.append('\n');
-            for (String tech : tag.getTechList()) {
-                if (tech.equals(MifareClassic.class.getName())) {
-                    MifareClassic mifareTag = MifareClassic.get(tag);
-                    String type = "Unknown";
-                    switch (mifareTag.getType()) {
-                    case MifareClassic.TYPE_CLASSIC:
-                        type = "Classic";
-                        break;
-                    case MifareClassic.TYPE_PLUS:
-                        type = "Plus";
-                        break;
-                    case MifareClassic.TYPE_PRO:
-                        type = "Pro";
-                        break;
-                    }
-                    sb.append("Mifare Classic type: ");
-                    sb.append(type);
-                    sb.append('\n');
 
-                    sb.append("Mifare size: ");
-                    sb.append(mifareTag.getSize() + " bytes");
-                    sb.append('\n');
-
-                    sb.append("Mifare sectors: ");
-                    sb.append(mifareTag.getSectorCount());
-                    sb.append('\n');
-
-                    sb.append("Mifare blocks: ");
-                    sb.append(mifareTag.getBlockCount());
-                    sb.append('\n');
+            if (tech.equals(MifareUltralight.class.getName())) {
+                MifareUltralight mifareUlTag = MifareUltralight.get(tag);
+                String type = "Unknown";
+                switch (mifareUlTag.getType()) {
+                case MifareUltralight.TYPE_ULTRALIGHT:
+                    type = "Ultralight";
+                    break;
+                case MifareUltralight.TYPE_ULTRALIGHT_C:
+                    type = "Ultralight C";
+                    break;
                 }
-
-                if (tech.equals(MifareUltralight.class.getName())) {
-                    MifareUltralight mifareUlTag = MifareUltralight.get(tag);
-                    String type = "Unknown";
-                    switch (mifareUlTag.getType()) {
-                    case MifareUltralight.TYPE_ULTRALIGHT:
-                        type = "Ultralight";
-                        break;
-                    case MifareUltralight.TYPE_ULTRALIGHT_C:
-                        type = "Ultralight C";
-                        break;
-                    }
-                    sb.append("Mifare Ultralight type: ");
-                    sb.append(type);
-                    sb.append('\n');
-                }
+                sb.append("Mifare Ultralight type: ");
+                sb.append(type);
+                sb.append('\n');
             }
-        }
-
-        try {
-            f = tagClass.getDeclaredField("mPollBytes");
-            f.setAccessible(true);
-            byte[] mPollBytes = (byte[]) f.get(p);
-            if (mPollBytes != null && mPollBytes.length > 0)
-                sb.append("Poll (hex): ").append(getHex(mPollBytes)).append("\n");
-        } catch (NoSuchFieldException e) {
-            e.printStackTrace();
-        }
-
-        try {
-            f = tagClass.getDeclaredField("mActivationBytes");
-            f.setAccessible(true);
-            byte[] mActivationBytes = (byte[]) f.get(p);
-            if (mActivationBytes != null && mActivationBytes.length > 0)
-                sb.append("Activation (hex): ").append(getHex(mActivationBytes));
-        } catch (NoSuchFieldException e) {
-            e.printStackTrace();
         }
 
         return sb.toString();
-    }
-
-    private Object translateTarget(String target) {
-        if ("iso14443_3a".equals(target))
-            return "ISO 14443-3A";
-        else if ("iso14443_3b".equals(target))
-            return "ISO 14443-3B";
-        else if ("iso14443_4".equals(target))
-            return "ISO 14443-4";
-        else if ("iso15693".equals(target))
-            return "ISO 15693 (RFID)";
-        else if ("jis_x_6319_4".equals(target))
-            return "JIS X-6319-4 (FeliCa)";
-        else if ("other".equals(target))
-            return "Unknown";
-
-        return target;
     }
 
     private String getHex(byte[] bytes) {
