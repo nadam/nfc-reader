@@ -1,5 +1,4 @@
 proguard.cfg
-.classpath
 default.properties
 bin/
 gen/
