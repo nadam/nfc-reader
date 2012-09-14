@@ -148,12 +148,7 @@ public class TagViewer extends Activity {
         }
     }
 
-    /**
-     * The reflection stuff in this method is copied from some Japanies site for backwards compatibility with Android
-     * 2.3-2.3.2.
-     */
-    private String dumpTagData(Parcelable p) throws SecurityException, IllegalArgumentException,
-            IllegalAccessException {
+    private String dumpTagData(Parcelable p) {
         StringBuilder sb = new StringBuilder();
         Tag tag = (Tag) p;
         byte[] id = tag.getId();
@@ -167,9 +162,9 @@ public class TagViewer extends Activity {
             sb.append(", ");
         }
         sb.delete(sb.length() - 2, sb.length());
-        sb.append('\n');
         for (String tech : tag.getTechList()) {
             if (tech.equals(MifareClassic.class.getName())) {
+                sb.append('\n');
                 MifareClassic mifareTag = MifareClassic.get(tag);
                 String type = "Unknown";
                 switch (mifareTag.getType()) {
@@ -197,10 +192,10 @@ public class TagViewer extends Activity {
 
                 sb.append("Mifare blocks: ");
                 sb.append(mifareTag.getBlockCount());
-                sb.append('\n');
             }
 
             if (tech.equals(MifareUltralight.class.getName())) {
+                sb.append('\n');
                 MifareUltralight mifareUlTag = MifareUltralight.get(tag);
                 String type = "Unknown";
                 switch (mifareUlTag.getType()) {
@@ -213,7 +208,6 @@ public class TagViewer extends Activity {
                 }
                 sb.append("Mifare Ultralight type: ");
                 sb.append(type);
-                sb.append('\n');
             }
         }
 
@@ -222,12 +216,12 @@ public class TagViewer extends Activity {
 
     private String getHex(byte[] bytes) {
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < bytes.length; i++) {
+        for (int i = bytes.length - 1; i >= 0; --i) {
             int b = bytes[i] & 0xff;
             if (b < 0x10)
                 sb.append('0');
             sb.append(Integer.toHexString(b));
-            if (i != bytes.length - 1) {
+            if (i > 0) {
                 sb.append(" ");
             }
         }
