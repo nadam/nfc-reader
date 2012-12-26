@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2010 The Android Open Source Project
- * Copyright (C) 2011 Adam Nyb�ck
+ * Copyright (C) 2011 Adam Nybäck
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import se.anyro.nfc_reader.record.ParsedNdefRecord;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.PendingIntent;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.nfc.NdefMessage;
 import android.nfc.NdefRecord;
@@ -35,6 +36,7 @@ import android.nfc.tech.MifareClassic;
 import android.nfc.tech.MifareUltralight;
 import android.os.Bundle;
 import android.os.Parcelable;
+import android.provider.Settings;
 import android.view.LayoutInflater;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -65,6 +67,8 @@ public class TagViewer extends Activity {
         mAdapter = NfcAdapter.getDefaultAdapter(this);
         if (mAdapter == null) {
             showMessage(R.string.error, R.string.no_nfc);
+            finish();
+            return;
         }
 
         mPendingIntent = PendingIntent.getActivity(this, 0,
@@ -101,7 +105,7 @@ public class TagViewer extends Activity {
         super.onResume();
         if (mAdapter != null) {
             if (!mAdapter.isEnabled()) {
-                showMessage(R.string.error, R.string.nfc_disabled);
+                showWirelessSettingsDialog();
             }
             mAdapter.enableForegroundDispatch(this, mPendingIntent, null, null);
             mAdapter.enableForegroundNdefPush(this, mNdefPushMessage);
@@ -115,6 +119,24 @@ public class TagViewer extends Activity {
             mAdapter.disableForegroundDispatch(this);
             mAdapter.disableForegroundNdefPush(this);
         }
+    }
+
+    private void showWirelessSettingsDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setMessage(R.string.nfc_disabled);
+        builder.setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialogInterface, int i) {
+                Intent intent = new Intent(Settings.ACTION_WIRELESS_SETTINGS);
+                startActivity(intent);
+            }
+        });
+        builder.setNegativeButton(android.R.string.cancel, new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialogInterface, int i) {
+                finish();
+            }
+        });
+        builder.create().show();
+        return;
     }
 
     private void resolveIntent(Intent intent) {
