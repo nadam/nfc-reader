@@ -17,6 +17,7 @@
 package se.anyro.nfc_reader;
 
 import java.nio.charset.Charset;
+import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
@@ -46,7 +47,7 @@ import android.widget.TextView;
  */
 public class TagViewer extends Activity {
 
-    private static final SimpleDateFormat TIME_FORMAT = new SimpleDateFormat();
+    private static final DateFormat TIME_FORMAT = SimpleDateFormat.getDateTimeInstance();
     private LinearLayout mTagContent;
 
     private NfcAdapter mAdapter;
