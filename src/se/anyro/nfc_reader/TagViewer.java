@@ -173,6 +173,7 @@ public class TagViewer extends Activity {
         byte[] id = tag.getId();
         sb.append("Tag ID (hex): ").append(getHex(id)).append("\n");
         sb.append("Tag ID (dec): ").append(getDec(id)).append("\n");
+        sb.append("ID (reversed): ").append(getReversed(id)).append("\n");
 
         String prefix = "android.nfc.tech.";
         sb.append("Technologies: ");
@@ -251,6 +252,17 @@ public class TagViewer extends Activity {
         long result = 0;
         long factor = 1;
         for (int i = 0; i < bytes.length; ++i) {
+            long value = bytes[i] & 0xffl;
+            result += value * factor;
+            factor *= 256l;
+        }
+        return result;
+    }
+
+    private long getReversed(byte[] bytes) {
+        long result = 0;
+        long factor = 1;
+        for (int i = bytes.length - 1; i >= 0; --i) {
             long value = bytes[i] & 0xffl;
             result += value * factor;
             factor *= 256l;
