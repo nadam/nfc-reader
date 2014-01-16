@@ -6,8 +6,8 @@
 -->
 <resources>
     <string name="app_name">Lecteur NFC</string>
-    <string name="intro_message">C'ets une simple application pour lire divers tags (NDEF, RFID, FeliCa, ISO 14443, etc).\n\nVous l'utilisez en tenant un tag ou une carte contre l\'arrière de votre appareil.\n\nVeuillez nous prévenir si vous voulez que nous changions comment les données sont affichées. Si vous avez un problème avec l\'application, envoyez nous un e-mail (adam@anyro.se) et nous vous dirons quand nous l\'aurons corrigé. Vous pouvez aussi étuider le code source et rapporter des problèmes sur https://github.com/nadam/nfc-reader.\n\nSi vous ne pouvez lire aucun tag, essayez d'autres applications et dites nous si cette application est la seule à ne pas marcher. Merci !</string>
+    <string name="intro_message">C\'ets une simple application pour lire divers tags (NDEF, RFID, FeliCa, ISO 14443, etc).\n\nVous l\'utilisez en tenant un tag ou une carte contre l\'arrière de votre appareil.\n\nVeuillez nous prévenir si vous voulez que nous changions comment les données sont affichées. Si vous avez un problème avec l\'application, envoyez nous un e-mail (adam@anyro.se) et nous vous dirons quand nous l\'aurons corrigé. Vous pouvez aussi étuider le code source et rapporter des problèmes sur https://github.com/nadam/nfc-reader.\n\nSi vous ne pouvez lire aucun tag, essayez d\'autres applications et dites nous si cette application est la seule à ne pas marcher. Merci !</string>
     <string name="error">Erreur</string>
     <string name="no_nfc">Pas de NFC trouvé sur cet appareil</string>
-    <string name="nfc_disabled">Le NFC n'est pas activé. Allez dans les paramètres "Sans fil et réseaux" pour l'activer.</string>
+    <string name="nfc_disabled">Le NFC n\'est pas activé. Allez dans les paramètres "Sans fil et réseaux" pour l\'activer.</string>
 </resources>
