@@ -20,4 +20,5 @@
     <string name="error">Error</string>
     <string name="no_nfc">No NFC found on this device</string>
     <string name="nfc_disabled">NFC is not enabled. Please go to the wireless settings to enable it.</string>
+    <string name="menu_main_clear_title">Clear all</string>
 </resources>

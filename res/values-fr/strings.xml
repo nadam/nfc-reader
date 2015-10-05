@@ -10,4 +10,5 @@
     <string name="error">Erreur</string>
     <string name="no_nfc">Pas de NFC trouvé sur cet appareil</string>
     <string name="nfc_disabled">Le NFC n\'est pas activé. Allez dans les paramètres "Sans fil et réseaux" pour l\'activer.</string>
+    <string name="menu_main_clear_title">Effacer tout</string>
 </resources>
