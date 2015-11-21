@@ -23,6 +23,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
+import android.view.*;
 import se.anyro.nfc_reader.record.ParsedNdefRecord;
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -38,7 +39,6 @@ import android.nfc.tech.MifareUltralight;
 import android.os.Bundle;
 import android.os.Parcelable;
 import android.provider.Settings;
-import android.view.LayoutInflater;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -289,6 +289,33 @@ public class TagViewer extends Activity {
             ParsedNdefRecord record = records.get(i);
             content.addView(record.getView(this, inflater, content, i), 1 + i);
             content.addView(inflater.inflate(R.layout.tag_divider, content, false), 2 + i);
+        }
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.menu_main, menu);
+        return true;
+    }
+    
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        // Handle item selection
+        switch (item.getItemId()) {
+            case R.id.menu_main_clear:
+              menuMainClearClick();
+            default:
+                return super.onOptionsItemSelected(item);
+        }
+    }
+
+    private void menuMainClearClick() {
+        for (int i = mTagContent.getChildCount() -1; i >= 0 ; i--) {
+            View view = mTagContent.getChildAt(i);
+            if (view.getId() != R.id.tag_viewer_text) {
+                mTagContent.removeViewAt(i);
+            }
         }
     }
 
