@@ -23,7 +23,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-import android.view.*;
 import se.anyro.nfc_reader.record.ParsedNdefRecord;
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -36,9 +35,17 @@ import android.nfc.NfcAdapter;
 import android.nfc.Tag;
 import android.nfc.tech.MifareClassic;
 import android.nfc.tech.MifareUltralight;
+import android.nfc.tech.NfcA;
 import android.os.Bundle;
+import android.os.IBinder;
+import android.os.Parcel;
 import android.os.Parcelable;
 import android.provider.Settings;
+import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
+import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -185,33 +192,44 @@ public class TagViewer extends Activity {
         for (String tech : tag.getTechList()) {
             if (tech.equals(MifareClassic.class.getName())) {
                 sb.append('\n');
-                MifareClassic mifareTag = MifareClassic.get(tag);
                 String type = "Unknown";
-                switch (mifareTag.getType()) {
-                case MifareClassic.TYPE_CLASSIC:
-                    type = "Classic";
-                    break;
-                case MifareClassic.TYPE_PLUS:
-                    type = "Plus";
-                    break;
-                case MifareClassic.TYPE_PRO:
-                    type = "Pro";
-                    break;
+                try {
+                    MifareClassic mifareTag;
+                    try {
+                        mifareTag = MifareClassic.get(tag);
+                    } catch (Exception e) {
+                        // Fix for Sony Xperia Z3/Z5 phones
+                        tag = cleanupTag(tag);
+                        mifareTag = MifareClassic.get(tag);
+                    }
+                    switch (mifareTag.getType()) {
+                    case MifareClassic.TYPE_CLASSIC:
+                        type = "Classic";
+                        break;
+                    case MifareClassic.TYPE_PLUS:
+                        type = "Plus";
+                        break;
+                    case MifareClassic.TYPE_PRO:
+                        type = "Pro";
+                        break;
+                    }
+                    sb.append("Mifare Classic type: ");
+                    sb.append(type);
+                    sb.append('\n');
+
+                    sb.append("Mifare size: ");
+                    sb.append(mifareTag.getSize() + " bytes");
+                    sb.append('\n');
+
+                    sb.append("Mifare sectors: ");
+                    sb.append(mifareTag.getSectorCount());
+                    sb.append('\n');
+
+                    sb.append("Mifare blocks: ");
+                    sb.append(mifareTag.getBlockCount());
+                } catch (Exception e) {
+                    sb.append("Mifare classic error: " + e.getMessage());
                 }
-                sb.append("Mifare Classic type: ");
-                sb.append(type);
-                sb.append('\n');
-
-                sb.append("Mifare size: ");
-                sb.append(mifareTag.getSize() + " bytes");
-                sb.append('\n');
-
-                sb.append("Mifare sectors: ");
-                sb.append(mifareTag.getSectorCount());
-                sb.append('\n');
-
-                sb.append("Mifare blocks: ");
-                sb.append(mifareTag.getBlockCount());
             }
 
             if (tech.equals(MifareUltralight.class.getName())) {
@@ -232,6 +250,94 @@ public class TagViewer extends Activity {
         }
 
         return sb.toString();
+    }
+
+    private Tag cleanupTag(Tag oTag) {
+        if (oTag == null)
+            return null;
+
+        String[] sTechList = oTag.getTechList();
+
+        Parcel oParcel = Parcel.obtain();
+        oTag.writeToParcel(oParcel, 0);
+        oParcel.setDataPosition(0);
+
+        int len = oParcel.readInt();
+        byte[] id = null;
+        if (len >= 0) {
+            id = new byte[len];
+            oParcel.readByteArray(id);
+        }
+        int[] oTechList = new int[oParcel.readInt()];
+        oParcel.readIntArray(oTechList);
+        Bundle[] oTechExtras = oParcel.createTypedArray(Bundle.CREATOR);
+        int serviceHandle = oParcel.readInt();
+        int isMock = oParcel.readInt();
+        IBinder tagService;
+        if (isMock == 0) {
+            tagService = oParcel.readStrongBinder();
+        } else {
+            tagService = null;
+        }
+        oParcel.recycle();
+
+        int nfca_idx = -1;
+        int mc_idx = -1;
+        short oSak = 0;
+        short nSak = 0;
+
+        for (int idx = 0; idx < sTechList.length; idx++) {
+            if (sTechList[idx].equals(NfcA.class.getName())) {
+                if (nfca_idx == -1) {
+                    nfca_idx = idx;
+                    if (oTechExtras[idx] != null && oTechExtras[idx].containsKey("sak")) {
+                        oSak = oTechExtras[idx].getShort("sak");
+                        nSak = oSak;
+                    }
+                } else {
+                    if (oTechExtras[idx] != null && oTechExtras[idx].containsKey("sak")) {
+                        nSak = (short) (nSak | oTechExtras[idx].getShort("sak"));
+                    }
+                }
+            } else if (sTechList[idx].equals(MifareClassic.class.getName())) {
+                mc_idx = idx;
+            }
+        }
+
+        boolean modified = false;
+
+        if (oSak != nSak) {
+            oTechExtras[nfca_idx].putShort("sak", nSak);
+            modified = true;
+        }
+
+        if (nfca_idx != -1 && mc_idx != -1 && oTechExtras[mc_idx] == null) {
+            oTechExtras[mc_idx] = oTechExtras[nfca_idx];
+            modified = true;
+        }
+
+        if (!modified) {
+            return oTag;
+        }
+
+        Parcel nParcel = Parcel.obtain();
+        nParcel.writeInt(id.length);
+        nParcel.writeByteArray(id);
+        nParcel.writeInt(oTechList.length);
+        nParcel.writeIntArray(oTechList);
+        nParcel.writeTypedArray(oTechExtras, 0);
+        nParcel.writeInt(serviceHandle);
+        nParcel.writeInt(isMock);
+        if (isMock == 0) {
+            nParcel.writeStrongBinder(tagService);
+        }
+        nParcel.setDataPosition(0);
+
+        Tag nTag = Tag.CREATOR.createFromParcel(nParcel);
+
+        nParcel.recycle();
+
+        return nTag;
     }
 
     private String getHex(byte[] bytes) {
