@@ -477,7 +477,7 @@ public class TagViewer extends Activity {
             builder.append('\n');
         }
         builder.setLength(builder.length() - 1); // Remove last new line
-        return builder.toString();
+        return builder.toString().replace(" ", "");
     }
 
     private String getIdsReversedHex() {
@@ -487,7 +487,7 @@ public class TagViewer extends Activity {
             builder.append('\n');
         }
         builder.setLength(builder.length() - 1); // Remove last new line
-        return builder.toString();
+        return builder.toString().replace(" ", "");
     }
 
     private String getIdsDec() {
