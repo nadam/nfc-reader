@@ -2,7 +2,25 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
   <item
     android:id="@+id/menu_main_clear"
-    android:showAsAction="always"
-    android:title="@string/menu_main_clear_title"
-      />
+    android:showAsAction="ifRoom"
+    android:title="@string/menu_main_clear_title" />
+  <item
+    android:id="@+id/menu_main_copy"
+    android:showAsAction="ifRoom"
+    android:title="@string/menu_main_copy">
+      <menu>
+          <item
+            android:id="@+id/menu_copy_hex"
+            android:title="@string/menu_copy_hex" />
+          <item
+            android:id="@+id/menu_copy_reversed_hex"
+            android:title="@string/menu_copy_reversed_hex" />
+          <item
+            android:id="@+id/menu_copy_dec"
+            android:title="@string/menu_copy_dec" />
+          <item
+            android:id="@+id/menu_copy_reversed_dec"
+            android:title="@string/menu_copy_reversed_dec" />
+      </menu>
+  </item>
 </menu>

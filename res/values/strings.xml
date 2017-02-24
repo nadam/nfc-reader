@@ -21,4 +21,10 @@
     <string name="no_nfc">No NFC found on this device</string>
     <string name="nfc_disabled">NFC is not enabled. Please go to the wireless settings to enable it.</string>
     <string name="menu_main_clear_title">Clear all</string>
+    <string name="menu_main_copy">Copy IDs</string>
+    <string name="menu_copy_hex">Hex</string>
+    <string name="menu_copy_reversed_hex">Reversed hex</string>
+    <string name="menu_copy_dec">Dec</string>
+    <string name="menu_copy_reversed_dec">Reversed dec</string>
+    <string name="nothing_scanned">Nothing scanned yet</string>
 </resources>

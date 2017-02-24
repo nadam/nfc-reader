@@ -19,6 +19,7 @@ package se.anyro.nfc_reader;
 import java.nio.charset.Charset;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -27,6 +28,8 @@ import se.anyro.nfc_reader.record.ParsedNdefRecord;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.PendingIntent;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.nfc.NdefMessage;
@@ -43,11 +46,11 @@ import android.os.Parcelable;
 import android.provider.Settings;
 import android.view.LayoutInflater;
 import android.view.Menu;
-import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 /**
  * An {@link Activity} which handles a broadcast of a new tag that the device just discovered.
@@ -62,6 +65,8 @@ public class TagViewer extends Activity {
     private NdefMessage mNdefPushMessage;
 
     private AlertDialog mDialog;
+
+    private List<Tag> mTags = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -163,24 +168,25 @@ public class TagViewer extends Activity {
                 // Unknown tag type
                 byte[] empty = new byte[0];
                 byte[] id = intent.getByteArrayExtra(NfcAdapter.EXTRA_ID);
-                Parcelable tag = intent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
+                Tag tag = (Tag) intent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
                 byte[] payload = dumpTagData(tag).getBytes();
                 NdefRecord record = new NdefRecord(NdefRecord.TNF_UNKNOWN, empty, id, payload);
                 NdefMessage msg = new NdefMessage(new NdefRecord[] { record });
                 msgs = new NdefMessage[] { msg };
+                mTags.add(tag);
             }
             // Setup the views
             buildTagViews(msgs);
         }
     }
 
-    private String dumpTagData(Parcelable p) {
+    private String dumpTagData(Tag tag) {
         StringBuilder sb = new StringBuilder();
-        Tag tag = (Tag) p;
         byte[] id = tag.getId();
-        sb.append("Tag ID (hex): ").append(getHex(id)).append("\n");
-        sb.append("Tag ID (dec): ").append(getDec(id)).append("\n");
-        sb.append("ID (reversed): ").append(getReversed(id)).append("\n");
+        sb.append("ID (hex): ").append(toHex(id)).append('\n');
+        sb.append("ID (reversed hex): ").append(toReversedHex(id)).append('\n');
+        sb.append("ID (dec): ").append(toDec(id)).append('\n');
+        sb.append("ID (reversed dec): ").append(toReversedDec(id)).append('\n');
 
         String prefix = "android.nfc.tech.";
         sb.append("Technologies: ");
@@ -340,7 +346,7 @@ public class TagViewer extends Activity {
         return nTag;
     }
 
-    private String getHex(byte[] bytes) {
+    private String toHex(byte[] bytes) {
         StringBuilder sb = new StringBuilder();
         for (int i = bytes.length - 1; i >= 0; --i) {
             int b = bytes[i] & 0xff;
@@ -354,7 +360,21 @@ public class TagViewer extends Activity {
         return sb.toString();
     }
 
-    private long getDec(byte[] bytes) {
+    private String toReversedHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < bytes.length; ++i) {
+            if (i > 0) {
+                sb.append(" ");
+            }
+            int b = bytes[i] & 0xff;
+            if (b < 0x10)
+                sb.append('0');
+            sb.append(Integer.toHexString(b));
+        }
+        return sb.toString();
+    }
+
+    private long toDec(byte[] bytes) {
         long result = 0;
         long factor = 1;
         for (int i = 0; i < bytes.length; ++i) {
@@ -365,7 +385,7 @@ public class TagViewer extends Activity {
         return result;
     }
 
-    private long getReversed(byte[] bytes) {
+    private long toReversedDec(byte[] bytes) {
         long result = 0;
         long factor = 1;
         for (int i = bytes.length - 1; i >= 0; --i) {
@@ -400,29 +420,94 @@ public class TagViewer extends Activity {
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        MenuInflater inflater = getMenuInflater();
-        inflater.inflate(R.menu.menu_main, menu);
+        getMenuInflater().inflate(R.menu.menu_main, menu);
         return true;
     }
     
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle item selection
+
+        if (mTags.size() == 0) {
+            Toast.makeText(this, R.string.nothing_scanned, Toast.LENGTH_LONG).show();
+            return true;
+        }
+
         switch (item.getItemId()) {
-            case R.id.menu_main_clear:
-              menuMainClearClick();
-            default:
-                return super.onOptionsItemSelected(item);
+        case R.id.menu_main_clear:
+            clearTags();
+            return true;
+        case R.id.menu_copy_hex:
+            copyIds(getIdsHex());
+            return true;
+        case R.id.menu_copy_reversed_hex:
+            copyIds(getIdsReversedHex());
+            return true;
+        case R.id.menu_copy_dec:
+            copyIds(getIdsDec());
+            return true;
+        case R.id.menu_copy_reversed_dec:
+            copyIds(getIdsReversedDec());
+            return true;
+        default:
+            return super.onOptionsItemSelected(item);
         }
     }
 
-    private void menuMainClearClick() {
+    private void clearTags() {
+        mTags.clear();
         for (int i = mTagContent.getChildCount() -1; i >= 0 ; i--) {
             View view = mTagContent.getChildAt(i);
             if (view.getId() != R.id.tag_viewer_text) {
                 mTagContent.removeViewAt(i);
             }
         }
+    }
+
+    private void copyIds(String text) {
+        ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        ClipData clipData = ClipData.newPlainText("NFC IDs", text);
+        clipboard.setPrimaryClip(clipData);
+        Toast.makeText(this, mTags.size() + " IDs copied", Toast.LENGTH_SHORT).show();
+    }
+
+    private String getIdsHex() {
+        StringBuilder builder = new StringBuilder();
+        for (Tag tag : mTags) {
+            builder.append(toHex(tag.getId()));
+            builder.append('\n');
+        }
+        builder.setLength(builder.length() - 1); // Remove last new line
+        return builder.toString();
+    }
+
+    private String getIdsReversedHex() {
+        StringBuilder builder = new StringBuilder();
+        for (Tag tag : mTags) {
+            builder.append(toReversedHex(tag.getId()));
+            builder.append('\n');
+        }
+        builder.setLength(builder.length() - 1); // Remove last new line
+        return builder.toString();
+    }
+
+    private String getIdsDec() {
+        StringBuilder builder = new StringBuilder();
+        for (Tag tag : mTags) {
+            builder.append(toDec(tag.getId()));
+            builder.append('\n');
+        }
+        builder.setLength(builder.length() - 1); // Remove last new line
+        return builder.toString();
+    }
+
+    private String getIdsReversedDec() {
+        StringBuilder builder = new StringBuilder();
+        for (Tag tag : mTags) {
+            builder.append(toReversedDec(tag.getId()));
+            builder.append('\n');
+        }
+        builder.setLength(builder.length() - 1); // Remove last new line
+        return builder.toString();
     }
 
     @Override
