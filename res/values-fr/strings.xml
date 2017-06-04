@@ -11,4 +11,10 @@
     <string name="no_nfc">Pas de NFC trouvé sur cet appareil</string>
     <string name="nfc_disabled">Le NFC n\'est pas activé. Allez dans les paramètres "Sans fil et réseaux" pour l\'activer.</string>
     <string name="menu_main_clear_title">Effacer tout</string>
+    <string name="menu_main_copy">Copier les IDs</string>
+    <string name="menu_copy_hex">Hex</string>
+    <string name="menu_copy_reversed_hex">Hex renversé</string>
+    <string name="menu_copy_dec">Dec</string>
+    <string name="menu_copy_reversed_dec">Dec renversé</string>
+    <string name="nothing_scanned">Rien de scanné pour le moment</string>
 </resources>
